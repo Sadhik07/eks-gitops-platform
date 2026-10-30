@@ -1,0 +1,85 @@
+# Run with: kyverno test platform/policies/tests
+# (signature verification needs a real registry, so it is tested in-cluster only)
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: workload-policies
+policies:
+  - ../require-pod-security.yaml
+  - ../require-resources-and-probes.yaml
+  - ../restrict-images.yaml
+resources:
+  - resources.yaml
+results:
+  # A fully compliant pod passes every rule
+  - policy: require-pod-security
+    rule: run-as-non-root
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: require-pod-security
+    rule: no-privilege-escalation-drop-all
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: require-pod-security
+    rule: no-host-namespaces-or-privileged
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: require-resources-and-probes
+    rule: require-requests-and-memory-limit
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: require-resources-and-probes
+    rule: require-liveness-probe
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: restrict-images
+    rule: trusted-registry-only
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  - policy: restrict-images
+    rule: disallow-latest-tag
+    resources: [compliant]
+    kind: Pod
+    result: pass
+  # Each bad pod fails the rule it violates
+  - policy: require-pod-security
+    rule: run-as-non-root
+    resources: [runs-as-root]
+    kind: Pod
+    result: fail
+  - policy: require-pod-security
+    rule: no-privilege-escalation-drop-all
+    resources: [privileged]
+    kind: Pod
+    result: fail
+  - policy: require-pod-security
+    rule: no-host-namespaces-or-privileged
+    resources: [privileged]
+    kind: Pod
+    result: fail
+  - policy: require-resources-and-probes
+    rule: require-requests-and-memory-limit
+    resources: [no-limits]
+    kind: Pod
+    result: fail
+  - policy: require-resources-and-probes
+    rule: require-liveness-probe
+    resources: [no-limits]
+    kind: Pod
+    result: fail
+  - policy: restrict-images
+    rule: trusted-registry-only
+    resources: [docker-hub-latest]
+    kind: Pod
+    result: fail
+  - policy: restrict-images
+    rule: disallow-latest-tag
+    resources: [docker-hub-latest]
+    kind: Pod
+    result: fail

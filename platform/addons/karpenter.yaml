@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: platform
+  source:
+    repoURL: public.ecr.aws/karpenter # OCI registry, declared in bootstrap/argocd-values.yaml
+    chart: karpenter
+    targetRevision: 1.15.1
+    helm:
+      valuesObject:
+        settings:
+          clusterName: CLUSTER_NAME        # patched per cluster
+          interruptionQueue: karpenter-CLUSTER_NAME # created by Terraform (modules/eks-cluster)
+        serviceAccount:
+          name: karpenter
+        replicas: 2
+        controller:
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 512Mi }
+        nodeSelector:
+          node-role: system
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["ServerSideApply=true"]

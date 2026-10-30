@@ -1,0 +1,81 @@
+# Validates everything ArgoCD will apply, before it reaches a cluster:
+#   1. every Kustomize overlay and cluster config renders
+#   2. rendered manifests match Kubernetes + CRD schemas (kubeconform)
+#   3. Kyverno policy unit tests pass
+#   4. rendered workloads pass the same Kyverno policies enforced in-cluster
+#   5. Checkov scans the rendered manifests
+name: manifests
+
+on:
+  pull_request:
+    paths: ["deploy/**", "platform/**", ".github/workflows/manifests.yaml"]
+  push:
+    branches: [main]
+    paths: ["deploy/**", "platform/**"]
+
+permissions:
+  contents: read
+
+env:
+  KUBECONFORM_VERSION: v0.8.0
+  KYVERNO_VERSION: v1.19.2
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+
+      - uses: kyverno/action-install-cli@fcee92fca5c883169ef9927acf543e0b5fc58289 # v0.2.0
+        with:
+          release: ${{ env.KYVERNO_VERSION }}
+
+      - name: Render every overlay
+        run: |
+          mkdir -p rendered rendered-local
+          for dir in deploy/overlays/*/* platform/clusters/* platform/clusters/*/config; do
+            [[ -f "$dir/kustomization.yaml" ]] || continue
+            out="rendered/$(echo "$dir" | tr '/' '_').yaml"
+            echo "rendering $dir"
+            kubectl kustomize "$dir" > "$out"
+          done
+          # kind-only overlay (includes a local SQS emulator): schema-checked, not security-scanned
+          kubectl kustomize deploy/overlays/local > rendered-local/local.yaml
+
+      - name: Schema validation (Kubernetes + CRDs)
+        run: |
+          kubeconform -strict -summary -output pretty \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            -ignore-missing-schemas \
+            rendered/*.yaml rendered-local/*.yaml
+
+      - name: Kyverno policy unit tests
+        run: kyverno test platform/policies/tests
+
+      - name: Workloads comply with cluster policies
+        run: |
+          # Same policies the admission controller enforces, applied to what we ship.
+          # (Signature verification needs the registry, so it is enforced in-cluster.)
+          for f in rendered/deploy_overlays_{dev,stage,prod}_*.yaml; do
+            # Kyverno auto-generates rules for Deployments but not Argo Rollouts,
+            # so check each Rollout's pod template as if it were a Deployment.
+            yq -i '(select(.kind == "Rollout") | .apiVersion) = "apps/v1"' "$f"
+            yq -i '(select(.kind == "Rollout") | del(.spec.strategy) | .kind) = "Deployment"' "$f"
+            kyverno apply platform/policies/require-pod-security.yaml \
+              platform/policies/require-resources-and-probes.yaml \
+              platform/policies/restrict-images.yaml \
+              --resource "$f" --audit-warn=false
+          done
+
+      - name: Checkov (Kubernetes)
+        uses: bridgecrewio/checkov-action@c10e2438743528f9e4549758fad8b7a62052541d # v12.3136.0
+        with:
+          directory: rendered
+          framework: kubernetes
+          config_file: .checkov.yaml

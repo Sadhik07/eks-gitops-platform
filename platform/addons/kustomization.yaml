@@ -1,0 +1,19 @@
+# Every add-on the platform runs, as ArgoCD Applications (app-of-apps).
+# Each cluster pulls this list through platform/clusters/<env> and patches in
+# its own values (cluster name, buckets, queue names).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - projects.yaml
+  - karpenter.yaml
+  - argo-rollouts.yaml
+  - external-secrets.yaml
+  - kyverno.yaml
+  - kube-prometheus-stack.yaml
+  - loki.yaml
+  - otel-collector.yaml
+  - velero.yaml
+  - platform-config.yaml
+  - kyverno-policies.yaml
+  - workloads.yaml

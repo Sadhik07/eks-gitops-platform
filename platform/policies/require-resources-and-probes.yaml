@@ -1,0 +1,46 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resources-and-probes
+  annotations:
+    policies.kyverno.io/title: Require resource requests, memory limits and probes
+    policies.kyverno.io/category: Reliability
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Requests let the scheduler and Karpenter size capacity correctly; memory
+      limits stop one pod starving its node; liveness probes let Kubernetes
+      self-heal hung processes.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-requests-and-memory-limit
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["orders"]
+      validate:
+        message: "Every container needs cpu/memory requests and a memory limit."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+    - name: require-liveness-probe
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["orders"]
+      validate:
+        message: "Every container needs a livenessProbe."
+        pattern:
+          spec:
+            containers:
+              - livenessProbe:
+                  =(periodSeconds): ">0"

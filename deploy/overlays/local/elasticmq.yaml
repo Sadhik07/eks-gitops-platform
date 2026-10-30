@@ -1,0 +1,65 @@
+# SQS-compatible queue for local development (kind only, never deployed to AWS)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticmq-config
+data:
+  elasticmq.conf: |
+    include classpath("application.conf")
+    queues {
+      orders-dlq {}
+      orders {
+        defaultVisibilityTimeout = 60 seconds
+        deadLettersQueue { name = "orders-dlq", maxReceiveCount = 5 }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticmq
+  template:
+    metadata:
+      labels:
+        app: elasticmq
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: elasticmq
+          image: softwaremill/elasticmq-native:1.7.1
+          ports:
+            - containerPort: 9324
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /opt/elasticmq.conf
+              subPath: elasticmq.conf
+      volumes:
+        - name: config
+          configMap:
+            name: elasticmq-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticmq
+spec:
+  selector:
+    app: elasticmq
+  ports:
+    - port: 9324
+      targetPort: 9324

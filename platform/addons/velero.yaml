@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+spec:
+  project: platform
+  source:
+    repoURL: https://vmware-tanzu.github.io/helm-charts
+    chart: velero
+    targetRevision: 12.2.2
+    helm:
+      valuesObject:
+        serviceAccount:
+          server:
+            name: velero-server # bound to an IAM role via EKS Pod Identity (Terraform)
+        initContainers:
+          - name: velero-plugin-for-aws
+            image: velero/velero-plugin-for-aws:v1.14.4
+            volumeMounts:
+              - { mountPath: /target, name: plugins }
+        credentials:
+          useSecret: false # credentials come from Pod Identity, not a static key
+        configuration:
+          backupStorageLocation:
+            - name: default
+              provider: aws
+              bucket: VELERO_BUCKET # patched per cluster
+              config: { region: us-east-1 }
+          volumeSnapshotLocation:
+            - name: default
+              provider: aws
+              config: { region: us-east-1 }
+        schedules:
+          orders-daily:
+            schedule: "0 3 * * *"
+            template:
+              ttl: 336h # 14 days
+              includedNamespaces: ["orders"]
+              snapshotVolumes: true
+        metrics:
+          enabled: true
+          serviceMonitor:
+            enabled: true
+            additionalLabels:
+              release: kube-prometheus-stack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]

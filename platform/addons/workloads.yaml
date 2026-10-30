@@ -1,0 +1,47 @@
+# One Application per service per environment, generated from the folders in
+# deploy/overlays/<env>/. Adding a service = adding a folder; no ArgoCD edits.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: orders
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform.git
+        revision: main
+        directories:
+          - path: deploy/overlays/ENV/* # patched per cluster
+  template:
+    metadata:
+      name: "{{ index .path.segments 2 }}-{{ .path.basename }}"
+      labels:
+        team: orders
+        env: "{{ index .path.segments 2 }}"
+    spec:
+      project: orders
+      source:
+        repoURL: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform.git
+        targetRevision: main
+        path: "{{ .path.path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: orders
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: ["CreateNamespace=true"]
+        managedNamespaceMetadata:
+          labels:
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/audit: restricted
+      # The HPA owns replica counts; don't fight it on every sync
+      ignoreDifferences:
+        - group: argoproj.io
+          kind: Rollout
+          jsonPointers: ["/spec/replicas"]
+        - group: apps
+          kind: Deployment
+          jsonPointers: ["/spec/replicas"]

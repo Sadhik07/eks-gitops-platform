@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../addons
+patches:
+  - target: { kind: Application, name: karpenter }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/settings/clusterName
+        value: orders-stage
+      - op: replace
+        path: /spec/source/helm/valuesObject/settings/interruptionQueue
+        value: karpenter-orders-stage
+  - target: { kind: Application, name: velero }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/configuration/backupStorageLocation/0/bucket
+        value: orders-stage-velero-123456789012
+  - target: { kind: Application, name: platform-config }
+    patch: |-
+      - op: replace
+        path: /spec/source/path
+        value: platform/clusters/stage/config
+  - target: { kind: ApplicationSet, name: orders }
+    patch: |-
+      - op: replace
+        path: /spec/generators/0/git/directories/0/path
+        value: deploy/overlays/stage/*

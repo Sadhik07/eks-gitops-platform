@@ -1,0 +1,139 @@
+# Exposes DORA metrics (from GitHub deployments and incident issues) to
+# Prometheus. The script is stdlib-only, so a stock Python image is enough.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: dora-github-token
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-secrets-manager
+  target:
+    name: dora-github-token
+  data:
+    - secretKey: GITHUB_TOKEN
+      remoteRef:
+        key: orders/ENV/dora-github-token # read-only fine-grained PAT; patched per cluster
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dora-exporter
+  namespace: monitoring
+  labels:
+    app: dora-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dora-exporter
+  template:
+    metadata:
+      labels:
+        app: dora-exporter
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: exporter
+          image: python:3.12-slim
+          command: ["python", "/app/dora_metrics.py", "--serve", "--port", "9100"]
+          env:
+            - name: GITHUB_REPOSITORY
+              value: YOUR_GITHUB_USERNAMENAME/eks-gitops-platform
+            - name: DORA_ENVIRONMENT
+              value: prod
+            - name: GITHUB_TOKEN_FILE # token mounted as a file, not exposed as an env var
+              value: /secrets/GITHUB_TOKEN
+          ports:
+            - name: metrics
+              containerPort: 9100
+          readinessProbe:
+            httpGet: { path: /metrics, port: metrics }
+            periodSeconds: 30
+          livenessProbe:
+            httpGet: { path: /metrics, port: metrics }
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 10m, memory: 48Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /app
+            - name: github-token
+              mountPath: /secrets
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: dora-exporter-script
+        - name: github-token
+          secret:
+            secretName: dora-github-token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dora-exporter
+  namespace: monitoring
+  labels:
+    app: dora-exporter
+spec:
+  selector:
+    app: dora-exporter
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dora-exporter
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: dora-exporter
+  endpoints:
+    - port: metrics
+      interval: 5m
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dora-exporter
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: dora-exporter
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector: {} # Prometheus, same namespace
+      ports:
+        - port: 9100
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - ports:
+        - port: 443 # api.github.com

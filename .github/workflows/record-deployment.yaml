@@ -1,0 +1,53 @@
+# Records every production change as a GitHub Deployment. These records feed
+# the DORA metrics exporter (lead time, deployment frequency, change failure rate).
+name: record-deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/overlays/prod/**"
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # need history to timestamp image commits and detect rollbacks
+
+      - name: Create deployment records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          for svc in api worker web; do
+            file="deploy/overlays/prod/$svc/kustomization.yaml"
+            new=$(yq ".images[] | select(.name == \"$svc\") | .newTag" "$file")
+            old=""
+            if git cat-file -e "$BEFORE:$file" 2>/dev/null; then
+              old=$(git show "$BEFORE:$file" | yq ".images[] | select(.name == \"$svc\") | .newTag")
+            fi
+            [[ "$new" == "$old" ]] && continue
+
+            new_sha=${new#sha-}; old_sha=${old#sha-}
+            commit_ts=$(git show -s --format=%cI "$new_sha" 2>/dev/null || echo "")
+            # Moving to an image whose commit is an ancestor of the current one = rollback
+            rollback=false
+            if [[ -n "$old_sha" && "$old_sha" != "$old" ]] && git merge-base --is-ancestor "$new_sha" "$old_sha" 2>/dev/null; then
+              rollback=true
+            fi
+
+            payload=$(jq -nc --arg s "$svc" --arg t "$new" --arg c "$commit_ts" --argjson r "$rollback" \
+              '{service:$s, image_tag:$t, commit_timestamp:$c, rollback:$r}')
+            id=$(jq -nc --argjson p "$payload" --arg ref "$GITHUB_SHA" --arg d "$svc $new" \
+                  '{ref:$ref, environment:"prod", auto_merge:false, required_contexts:[], description:$d, payload:$p}' \
+                 | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)
+            gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=success \
+              -f description="Merged to main; ArgoCD rolls it out with a canary" > /dev/null
+            echo "- $svc -> $new (rollback: $rollback)" >> "$GITHUB_STEP_SUMMARY"
+          done

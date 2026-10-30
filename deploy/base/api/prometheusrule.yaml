@@ -1,0 +1,54 @@
+# SLO: 99.5% of API requests succeed over 30 days (error budget = 0.5%).
+# Multi-window, multi-burn-rate alerts from the Google SRE Workbook:
+#   page   when the budget burns 14.4x too fast (2% of the budget in 1h)
+#   ticket when it burns 6x too fast (5% of the budget in 6h)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: api-slo
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: api-slo.recording
+      rules:
+        - record: slo:api_errors:ratio_rate5m
+          expr: |
+            sum(rate(http_requests_total{service="api", code=~"5.."}[5m]))
+            / sum(rate(http_requests_total{service="api"}[5m]))
+        - record: slo:api_errors:ratio_rate30m
+          expr: |
+            sum(rate(http_requests_total{service="api", code=~"5.."}[30m]))
+            / sum(rate(http_requests_total{service="api"}[30m]))
+        - record: slo:api_errors:ratio_rate1h
+          expr: |
+            sum(rate(http_requests_total{service="api", code=~"5.."}[1h]))
+            / sum(rate(http_requests_total{service="api"}[1h]))
+        - record: slo:api_errors:ratio_rate6h
+          expr: |
+            sum(rate(http_requests_total{service="api", code=~"5.."}[6h]))
+            / sum(rate(http_requests_total{service="api"}[6h]))
+    - name: api-slo.alerts
+      rules:
+        - alert: ApiErrorBudgetFastBurn
+          expr: |
+            slo:api_errors:ratio_rate1h > (14.4 * 0.005)
+            and slo:api_errors:ratio_rate5m > (14.4 * 0.005)
+          for: 2m
+          labels:
+            severity: page
+            service: api
+          annotations:
+            summary: API is burning its 30-day error budget 14.4x too fast
+            runbook_url: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform/blob/main/docs/runbooks/slo-burn-rate.md
+        - alert: ApiErrorBudgetSlowBurn
+          expr: |
+            slo:api_errors:ratio_rate6h > (6 * 0.005)
+            and slo:api_errors:ratio_rate30m > (6 * 0.005)
+          for: 15m
+          labels:
+            severity: ticket
+            service: api
+          annotations:
+            summary: API is burning its 30-day error budget 6x too fast
+            runbook_url: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform/blob/main/docs/runbooks/slo-burn-rate.md

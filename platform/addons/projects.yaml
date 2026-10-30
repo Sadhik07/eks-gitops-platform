@@ -1,0 +1,39 @@
+# Platform add-ons may create cluster-scoped resources; application teams may not.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+spec:
+  description: Cluster add-ons owned by the platform team
+  sourceRepos: ["*"]
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: orders
+spec:
+  description: Orders application services
+  sourceRepos:
+    - https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: orders
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+  # Sync windows: no automated prod syncs during the weekend change freeze
+  syncWindows:
+    - kind: deny
+      schedule: "0 0 * * 6"
+      duration: 48h
+      applications: ["prod-*"]
+      manualSync: true

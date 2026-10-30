@@ -1,0 +1,6 @@
+# Included by AWS overlays only: pulls API secrets from AWS Secrets Manager
+# via External Secrets Operator. The local kind overlay leaves it out.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecret.yaml

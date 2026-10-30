@@ -1,0 +1,19 @@
+# Keeps pinned GitHub Action SHAs, Python deps, base images and Terraform
+# providers current. Helm chart versions in platform/addons are updated by
+# Renovate (renovate.json), which understands ArgoCD Application manifests.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+  - package-ecosystem: pip
+    directories: ["/apps/api", "/apps/worker"]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directories: ["/apps/api", "/apps/worker", "/apps/web"]
+    schedule: { interval: weekly }
+  - package-ecosystem: terraform
+    directories: ["/infra/terraform/live/*", "/infra/terraform/modules/*"]
+    schedule: { interval: weekly }

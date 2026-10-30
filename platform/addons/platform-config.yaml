@@ -1,0 +1,19 @@
+# Cluster-wide config that depends on the add-on CRDs: Karpenter NodePools,
+# the ClusterSecretStore, storage classes and Grafana dashboards.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform.git
+    targetRevision: main
+    path: platform/clusters/ENV/config # patched per cluster
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["ServerSideApply=true"]

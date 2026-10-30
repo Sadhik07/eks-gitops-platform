@@ -1,0 +1,70 @@
+# Builds only the services that changed, then hands each one to the reusable
+# build workflow (test -> build -> scan -> SBOM -> push -> sign -> bump dev).
+name: ci
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - ".github/workflows/ci.yaml"
+      - ".github/workflows/_build-service.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - ".github/workflows/ci.yaml"
+      - ".github/workflows/_build-service.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      services: ${{ steps.pick.outputs.services }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            api: ["apps/api/**"]
+            worker: ["apps/worker/**"]
+            web: ["apps/web/**"]
+            pipeline: [".github/workflows/ci.yaml", ".github/workflows/_build-service.yaml"]
+      - id: pick
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          # A pipeline change or a manual run rebuilds everything
+          if [[ "$MANUAL" == "true" ]] || echo "$CHANGES" | jq -e 'index("pipeline")' >/dev/null; then
+            echo 'services=["api","worker","web"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "services=$(echo "$CHANGES" | jq -c 'map(select(. != "pipeline"))')" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    uses: ./.github/workflows/_build-service.yaml
+    with:
+      service: ${{ matrix.service }}
+      publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    permissions:
+      contents: write        # bump the dev overlay
+      id-token: write        # OIDC to AWS and Sigstore
+      security-events: write # upload Trivy SARIF
+    secrets: inherit

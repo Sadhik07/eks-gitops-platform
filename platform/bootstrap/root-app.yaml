@@ -1,0 +1,21 @@
+# The only manifest applied by hand. It points ArgoCD at
+# platform/clusters/<env>, and from there ArgoCD installs every add-on and
+# workload. scripts/bootstrap-cluster.sh substitutes ENV.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USERNAMENAME/eks-gitops-platform.git
+    targetRevision: main
+    path: platform/clusters/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

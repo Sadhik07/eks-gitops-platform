@@ -1,0 +1,30 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+tfplan.json
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Rendered manifests and scan output
+.rendered/
+rendered/
+rendered-local/
+*.sarif
+sbom*.json
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

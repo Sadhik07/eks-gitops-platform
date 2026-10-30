@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: api-canary-health
+spec:
+  args:
+    - name: canary-hash
+    - name: prometheus-address
+      value: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+  metrics:
+    # Fail the canary if more than 5% of its requests return 5xx.
+    - name: error-rate
+      interval: 30s
+      count: 8
+      failureLimit: 2
+      successCondition: len(result) == 0 || result[0] <= 0.05
+      provider:
+        prometheus:
+          address: "{{args.prometheus-address}}"
+          query: |
+            sum(rate(http_requests_total{service="api", code=~"5..", rollouts_pod_template_hash="{{args.canary-hash}}"}[1m]))
+            /
+            sum(rate(http_requests_total{service="api", rollouts_pod_template_hash="{{args.canary-hash}}"}[1m]))
+    # Fail the canary if its p95 latency exceeds 500ms.
+    - name: p95-latency
+      interval: 30s
+      count: 8
+      failureLimit: 2
+      successCondition: len(result) == 0 || result[0] <= 0.5
+      provider:
+        prometheus:
+          address: "{{args.prometheus-address}}"
+          query: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{service="api", rollouts_pod_template_hash="{{args.canary-hash}}"}[1m])))

@@ -1,0 +1,14 @@
+# Teach kustomize that Argo Rollouts reference generated ConfigMaps/Secrets,
+# so configMapGenerator name hashes are rewritten in the Rollout too.
+# (Image overrides already apply to any kind with a pod template.)
+nameReference:
+  - kind: ConfigMap
+    version: v1
+    fieldSpecs:
+      - path: spec/template/spec/containers/envFrom/configMapRef/name
+        kind: Rollout
+  - kind: Secret
+    version: v1
+    fieldSpecs:
+      - path: spec/template/spec/containers/envFrom/secretRef/name
+        kind: Rollout

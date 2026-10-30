@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["argocd"],
+  "argocd": {
+    "fileMatch": ["^platform/addons/.+\\.yaml$"]
+  },
+  "packageRules": [
+    {
+      "description": "Group platform add-on chart bumps into one weekly PR",
+      "matchManagers": ["argocd"],
+      "groupName": "platform add-ons",
+      "schedule": ["before 6am on monday"]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Production changes need an explicit owner approval (enable "Require review
+# from Code Owners" in the main branch protection rule).
+/deploy/overlays/prod/      @YOUR_GITHUB_USERNAME
+/infra/terraform/live/prod/ @YOUR_GITHUB_USERNAME
+/platform/policies/         @YOUR_GITHUB_USERNAME
+/.github/                   @YOUR_GITHUB_USERNAME

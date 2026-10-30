@@ -1,0 +1,24 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  role: KarpenterNode-CLUSTER_NAME # patched per cluster; created by Terraform
+  amiSelectorTerms:
+    # Track the latest AL2023 AMI in dev; pin a version (al2023@vYYYYMMDD) in prod
+    - alias: al2023@latest
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: CLUSTER_NAME
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: CLUSTER_NAME
+  metadataOptions:
+    httpTokens: required # IMDSv2 only
+    httpPutResponseHopLimit: 1 # pods cannot reach the node's instance metadata
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi
+        volumeType: gp3
+        encrypted: true

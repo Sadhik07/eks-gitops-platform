@@ -1,0 +1,28 @@
+# Unit tests for repo tooling (DORA metrics calculator) and shell script linting
+name: tests
+
+on:
+  pull_request:
+    paths: ["platform/config/common/dora/**", "tests/**", "scripts/**", ".github/workflows/tests.yaml"]
+  push:
+    branches: [main]
+    paths: ["platform/config/common/dora/**", "tests/**", "scripts/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: |
+          pip install pytest==8.3.5 ruff==0.11.9
+          ruff check platform/config/common/dora tests
+          python -m pytest -q tests
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh

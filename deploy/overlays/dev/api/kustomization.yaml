@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orders
+resources:
+  - ../../../base/api
+components:
+  - ../../../components/aws-secrets
+images:
+  - name: api
+    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/orders/api
+    newTag: bootstrap # updated by CI on every merge to main
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=dev
+      - AWS_REGION=us-east-1
+      - QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/orders-dev-orders
+      - LOG_LEVEL=DEBUG
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4317
+patches:
+  - target: { kind: ExternalSecret, name: api-secrets }
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: orders/dev/api
+  - target: { kind: Rollout, name: api }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target: { kind: HorizontalPodAutoscaler, name: api }
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4

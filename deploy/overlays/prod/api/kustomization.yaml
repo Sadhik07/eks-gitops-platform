@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orders
+resources:
+  - ../../../base/api
+components:
+  - ../../../components/aws-secrets
+images:
+  - name: api
+    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/orders/api
+    newTag: bootstrap # promoted from stage by a reviewed pull request
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=prod
+      - AWS_REGION=us-east-1
+      - QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/orders-prod-orders
+      - LOG_LEVEL=INFO
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4317
+patches:
+  - target: { kind: ExternalSecret, name: api-secrets }
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: orders/prod/api
+  # Slower canary in prod: more time at low weight to catch rare errors
+  - target: { kind: Rollout, name: api }
+    patch: |-
+      - op: replace
+        path: /spec/strategy/canary/steps
+        value:
+          - setWeight: 10
+          - pause: { duration: 5m }
+          - setWeight: 25
+          - pause: { duration: 5m }
+          - setWeight: 50
+          - pause: { duration: 5m }
+          - setWeight: 75
+          - pause: { duration: 5m }
+  - target: { kind: AnalysisTemplate, name: api-canary-health }
+    patch: |-
+      - op: replace
+        path: /spec/metrics/0/count
+        value: 40
+      - op: replace
+        path: /spec/metrics/1/count
+        value: 40

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orders</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; color: #1b1f24; }
+    form { display: grid; gap: .75rem; }
+    input, button { font: inherit; padding: .5rem .75rem; }
+    #out { margin-top: 1rem; font-family: ui-monospace, monospace; white-space: pre-wrap; }
+    small { color: #57606a; }
+  </style>
+</head>
+<body>
+  <h1>Place an order</h1>
+  <form id="f">
+    <label>SKU <input name="sku" value="SKU-123" required></label>
+    <label>Quantity <input name="quantity" type="number" min="1" value="1" required></label>
+    <button>Submit</button>
+  </form>
+  <div id="out"></div>
+  <p><small id="ver">api version: …</small></p>
+  <script>
+    const out = document.getElementById('out');
+    fetch('/api/version').then(r => r.json()).then(v => {
+      document.getElementById('ver').textContent = `api version: ${v.version}`;
+    }).catch(() => {});
+    document.getElementById('f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      data.quantity = Number(data.quantity);
+      const r = await fetch('/api/orders', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+      });
+      out.textContent = `${r.status} ${await r.text()}`;
+    });
+  </script>
+</body>
+</html>

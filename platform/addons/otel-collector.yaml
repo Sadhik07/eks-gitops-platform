@@ -1,0 +1,66 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+spec:
+  project: platform
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: 0.178.1
+    helm:
+      valuesObject:
+        fullnameOverride: otel-collector
+        mode: deployment
+        replicaCount: 2
+        image:
+          repository: otel/opentelemetry-collector-contrib
+        presets:
+          kubernetesAttributes:
+            enabled: true # enrich spans with pod, namespace and deployment
+        config:
+          receivers:
+            otlp:
+              protocols:
+                grpc: { endpoint: "0.0.0.0:4317" }
+                http: { endpoint: "0.0.0.0:4318" }
+          processors:
+            memory_limiter:
+              check_interval: 1s
+              limit_percentage: 80
+              spike_limit_percentage: 25
+            batch: {}
+            # Drop health-check spans: they are noise and cost money downstream
+            filter/healthchecks:
+              error_mode: ignore
+              traces:
+                span:
+                  - 'attributes["url.path"] == "/healthz"'
+                  - 'attributes["url.path"] == "/readyz"'
+          exporters:
+            otlphttp/loki:
+              endpoint: http://loki-gateway.observability.svc/otlp
+            prometheusremotewrite:
+              endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc:9090/api/v1/write
+            debug:
+              verbosity: basic
+          service:
+            pipelines:
+              traces:
+                receivers: [otlp]
+                processors: [memory_limiter, filter/healthchecks, batch]
+                exporters: [debug] # swap for Tempo, X-Ray or Jaeger
+              metrics:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [prometheusremotewrite]
+              logs:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [otlphttp/loki]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["CreateNamespace=true"]

@@ -1,0 +1,18 @@
+# Repository-wide Checkov settings. Resource-specific exceptions live next to
+# the resource as `#checkov:skip=<ID>:<reason>` so the justification is reviewed
+# with the code.
+compact: true
+quiet: true
+download-external-modules: false
+skip-check:
+  # Registry modules are pinned by version constraint, and .terraform.lock.hcl
+  # pins provider hashes. Pinning registry modules to git SHAs adds churn
+  # without a meaningful supply-chain gain for HashiCorp-verified modules.
+  - CKV_TF_1
+  # CPU limits cause CFS throttling and latency spikes; we set CPU requests and
+  # memory limits instead (enforced by the require-resources-and-probes policy).
+  - CKV_K8S_11
+  # Tags are immutable (ECR IMMUTABLE) and Kyverno rewrites them to digests at
+  # admission after verifying signatures, so IfNotPresent + tags is safe here.
+  - CKV_K8S_15
+  - CKV_K8S_43

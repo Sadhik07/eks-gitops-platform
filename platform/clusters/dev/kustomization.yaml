@@ -1,0 +1,40 @@
+# Everything ArgoCD runs on the dev cluster: the shared add-on list plus
+# dev-specific values. The root Application (platform/bootstrap/root-dev.yaml)
+# points here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../addons
+patches:
+  - target: { kind: Application, name: karpenter }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/settings/clusterName
+        value: orders-dev
+      - op: replace
+        path: /spec/source/helm/valuesObject/settings/interruptionQueue
+        value: karpenter-orders-dev
+      - op: replace
+        path: /spec/source/helm/valuesObject/replicas
+        value: 1
+  - target: { kind: Application, name: velero }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/configuration/backupStorageLocation/0/bucket
+        value: orders-dev-velero-123456789012
+  - target: { kind: Application, name: platform-config }
+    patch: |-
+      - op: replace
+        path: /spec/source/path
+        value: platform/clusters/dev/config
+  - target: { kind: ApplicationSet, name: orders }
+    patch: |-
+      - op: replace
+        path: /spec/generators/0/git/directories/0/path
+        value: deploy/overlays/dev/*
+  # Dev runs lean: single replicas for Kyverno's admission controller
+  - target: { kind: Application, name: kyverno }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/admissionController/replicas
+        value: 1

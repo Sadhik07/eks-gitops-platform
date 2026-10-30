@@ -1,0 +1,56 @@
+# Values for the one-time `helm install argocd` done by scripts/bootstrap-cluster.sh.
+# After that, ArgoCD manages everything else from Git.
+global:
+  # Run ArgoCD on the tainted system node group so it is up before Karpenter
+  nodeSelector:
+    node-role: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+
+configs:
+  params:
+    server.insecure: false
+  cm:
+    # Reconcile Git every 3 minutes (webhooks make it near-instant when configured)
+    timeout.reconciliation: 180s
+    # Applications report real health, so sync waves wait for CRD-providing add-ons
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs
+  repositories:
+    karpenter-oci:
+      type: helm
+      name: karpenter
+      url: public.ecr.aws/karpenter
+      enableOCI: "true"
+  rbac:
+    # Read-only by default; admins come from SSO groups in a real setup
+    policy.default: role:readonly
+
+controller:
+  replicas: 1
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false # enabled after kube-prometheus-stack installs its CRDs
+
+server:
+  replicas: 2
+
+repoServer:
+  replicas: 2
+
+applicationSet:
+  replicas: 2
+
+notifications:
+  enabled: true

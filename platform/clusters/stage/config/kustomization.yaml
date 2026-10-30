@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../config/common
+  - ../../../config/karpenter
+patches:
+  - target: { kind: EC2NodeClass, name: default }
+    patch: |-
+      - op: replace
+        path: /spec/role
+        value: KarpenterNode-orders-stage
+      - op: replace
+        path: /spec/subnetSelectorTerms/0/tags/karpenter.sh~1discovery
+        value: orders-stage
+      - op: replace
+        path: /spec/securityGroupSelectorTerms/0/tags/karpenter.sh~1discovery
+        value: orders-stage
+  - target: { kind: ExternalSecret, name: dora-github-token }
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: orders/stage/dora-github-token

@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Traffic from the web frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              app: web
+      ports:
+        - port: 8080
+    # Prometheus scrapes
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # Same-namespace dependencies (local SQS emulator in kind)
+    - to:
+        - podSelector: {}
+    # OpenTelemetry collector
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - port: 4317
+    # AWS APIs (SQS, STS via Pod Identity) over TLS
+    - ports:
+        - port: 443
+    # EKS Pod Identity agent (link-local)
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - port: 80

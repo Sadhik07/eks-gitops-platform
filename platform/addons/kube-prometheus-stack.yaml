@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  project: platform
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 92.16.1
+    helm:
+      valuesObject:
+        fullnameOverride: kube-prometheus-stack
+        prometheus:
+          prometheusSpec:
+            retention: 15d
+            # Only pick up ServiceMonitors/PrometheusRules labeled for this release
+            serviceMonitorSelector:
+              matchLabels: { release: kube-prometheus-stack }
+            ruleSelector:
+              matchLabels: { release: kube-prometheus-stack }
+            enableRemoteWriteReceiver: true # lets the OTel collector push metrics
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests: { storage: 50Gi }
+        alertmanager:
+          config:
+            route:
+              receiver: default
+              group_by: ["alertname", "service"]
+              routes:
+                - matchers: ['severity="page"']
+                  receiver: pager
+            receivers:
+              - name: default
+              - name: pager # wire to PagerDuty/Slack via a secret in a real account
+        grafana:
+          defaultDashboardsTimezone: utc
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              searchNamespace: ALL
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki-gateway.observability.svc
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]

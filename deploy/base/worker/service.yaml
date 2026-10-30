@@ -1,0 +1,15 @@
+# Headless metrics Service so the ServiceMonitor can discover worker pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker-metrics
+  labels:
+    app: worker
+spec:
+  clusterIP: None
+  selector:
+    app: worker
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics

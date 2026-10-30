@@ -1,0 +1,47 @@
+# Everything in one namespace on a kind cluster, with ElasticMQ standing in
+# for SQS. Used by `make local-up` and the canary rollback demo.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orders
+resources:
+  - ../../base/api
+  - ../../base/worker
+  - ../../base/web
+  - elasticmq.yaml
+images:
+  - { name: api, newName: orders/api, newTag: local }
+  - { name: worker, newName: orders/worker, newTag: local }
+  - { name: web, newName: orders/web, newTag: local }
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=local
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_ENDPOINT_URL=http://elasticmq:9324
+      - QUEUE_URL=http://elasticmq:9324/000000000000/orders
+  - name: worker-config
+    literals:
+      - ENVIRONMENT=local
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_ENDPOINT_URL=http://elasticmq:9324
+      - QUEUE_URL=http://elasticmq:9324/000000000000/orders
+patches:
+  - target: { kind: Rollout, name: api }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 4
+  - target: { kind: Deployment, name: worker }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target: { kind: Deployment, name: web }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

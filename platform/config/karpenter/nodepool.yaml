@@ -1,0 +1,35 @@
+# Application capacity. Karpenter picks the cheapest instance that fits pending
+# pods, prefers Spot, and consolidates under-used nodes.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: general
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r", "t"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["4"]
+      expireAfter: 720h # recycle nodes monthly so they pick up patched AMIs
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 2m
+    budgets:
+      - nodes: "10%" # never disrupt more than 10% of nodes at once
+  limits:
+    cpu: "64" # hard ceiling on spend
+    memory: 256Gi
