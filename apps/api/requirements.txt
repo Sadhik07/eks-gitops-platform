@@ -5,4 +5,4 @@ pydantic==2.11.4
 boto3==1.38.13
 opentelemetry-sdk==1.33.0
 opentelemetry-exporter-otlp-proto-grpc==1.33.0
-opentelemetry-instrumentation-fastapi==0.54b0
+opentelemetry-instrumentation-fastapi==0.66b1
