@@ -57,9 +57,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: api-config
-            - secretRef:
-                name: api-secrets
-                optional: true
           env:
             - name: OTEL_SERVICE_NAME
               value: api
@@ -81,6 +78,14 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # Secrets are mounted as files (one file per key), never exposed as env vars
+            - name: secrets
+              mountPath: /var/run/secrets/orders
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: secrets
+          secret:
+            secretName: api-secrets # created by External Secrets in AWS overlays
+            optional: true

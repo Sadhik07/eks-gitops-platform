@@ -1,8 +1,8 @@
-fastapi==0.115.12
-uvicorn[standard]==0.34.2
-prometheus-client==0.21.1
-pydantic==2.11.4
-boto3==1.38.13
-opentelemetry-sdk==1.33.0
-opentelemetry-exporter-otlp-proto-grpc==1.33.0
-opentelemetry-instrumentation-fastapi==0.54b0
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+prometheus-client==0.26.0
+pydantic==2.14.2
+boto3==1.43.123
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp-proto-grpc==1.45.2
+opentelemetry-instrumentation-fastapi==0.66b2

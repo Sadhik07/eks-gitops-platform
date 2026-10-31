@@ -62,7 +62,9 @@ jobs:
     uses: ./.github/workflows/_build-service.yaml
     with:
       service: ${{ matrix.service }}
-      publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      # Publishing needs the AWS role from infra/terraform/live/global. Until that
+      # variable exists, main still gets the full test/build/scan/SBOM pipeline.
+      publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_ECR_PUSH_ROLE_ARN != '' }}
     permissions:
       contents: write        # bump the dev overlay
       id-token: write        # OIDC to AWS and Sigstore

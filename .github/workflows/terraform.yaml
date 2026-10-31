@@ -36,6 +36,8 @@ jobs:
         with:
           tflint_version: v0.65.0
       - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # avoids API rate limits when tflint downloads the AWS ruleset
         run: |
           tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
           tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl" --chdir infra/terraform
@@ -63,7 +65,8 @@ jobs:
 
   plan:
     name: plan (${{ matrix.root }})
-    if: github.event_name == 'pull_request'
+    # Runs once the plan role exists (see docs/setup-aws.md); static checks always run
+    if: github.event_name == 'pull_request' && vars.AWS_TF_PLAN_ROLE_ARN != ''
     needs: static
     runs-on: ubuntu-latest
     permissions:
@@ -132,7 +135,7 @@ jobs:
 
   apply:
     name: apply (${{ matrix.root }})
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_TF_APPLY_ROLE_ARN != ''
     needs: static
     runs-on: ubuntu-latest
     permissions:

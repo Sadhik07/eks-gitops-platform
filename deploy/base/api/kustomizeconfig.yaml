@@ -10,5 +10,5 @@ nameReference:
   - kind: Secret
     version: v1
     fieldSpecs:
-      - path: spec/template/spec/containers/envFrom/secretRef/name
+      - path: spec/template/spec/volumes/secret/secretName
         kind: Rollout
