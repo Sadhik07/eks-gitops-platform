@@ -98,3 +98,45 @@ spec:
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-azure
+  namespace: orders
+spec:
+  securityContext:
+    runAsNonRoot: true
+  containers:
+    - name: app
+      image: sadhik07orders.azurecr.io/orders/api:sha-3f9c2a1b4c5d
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { memory: 256Mi }
+      livenessProbe:
+        httpGet: { path: /healthz, port: 8080 }
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: other-team-acr
+  namespace: orders
+spec:
+  securityContext:
+    runAsNonRoot: true
+  containers:
+    - name: app
+      image: someoneelse.azurecr.io/tools/debug:1.0
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { memory: 256Mi }
+      livenessProbe:
+        httpGet: { path: /healthz, port: 8080 }
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]

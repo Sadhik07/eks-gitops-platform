@@ -28,8 +28,9 @@ lint: ## Lint Python, shell, Dockerfiles and Terraform
 	ruff format --check apps platform/config/common/dora tests
 	shellcheck scripts/*.sh
 	@for s in api worker web; do hadolint apps/$$s/Dockerfile || exit 1; done
-	terraform fmt -check -recursive infra/terraform
+	terraform fmt -check -recursive infra/terraform infra/terraform-azure
 	tflint --recursive --config "$(CURDIR)/.tflint.hcl" --chdir infra/terraform
+	tflint --recursive --config "$(CURDIR)/.tflint-azure.hcl" --chdir infra/terraform-azure
 
 validate: ## Render every overlay and validate against Kubernetes + CRD schemas
 	@mkdir -p .rendered && rm -f .rendered/*
@@ -47,5 +48,10 @@ check: test lint validate policy-test ## Everything CI runs, locally
 
 ## ---------- AWS ----------
 .PHONY: bootstrap-dev bootstrap-stage bootstrap-prod
-bootstrap-%: ## Install ArgoCD and hand an EKS cluster over to GitOps (e.g. make bootstrap-dev)
+bootstrap-%: ## Install ArgoCD and hand a cluster to GitOps (make bootstrap-dev, make bootstrap-azure-dev)
 	./scripts/bootstrap-cluster.sh $*
+
+## ---------- Azure ----------
+.PHONY: azure-sync
+azure-sync: ## Write Azure Terraform outputs (client ids, Key Vault URL) into the manifests
+	./scripts/azure-sync-outputs.sh

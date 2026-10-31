@@ -1,0 +1,31 @@
+# Cluster config for AKS: the shared dashboards and DORA exporter, a Key Vault
+# secret store instead of Secrets Manager, and no EBS storage class or
+# Karpenter EC2NodeClass (AKS provides managed-csi and Node Auto-Provisioning).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../config/common
+  - cluster-secret-store-azure.yaml
+patches:
+  - target: { kind: StorageClass, name: gp3 }
+    patch: |-
+      $patch: delete
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: gp3
+  - target: { kind: ClusterSecretStore, name: aws-secrets-manager }
+    patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: ClusterSecretStore
+      metadata:
+        name: aws-secrets-manager
+  - target: { kind: ExternalSecret, name: dora-github-token }
+    patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: azure-key-vault
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: dora-github-token

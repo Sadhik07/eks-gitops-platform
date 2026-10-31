@@ -65,8 +65,10 @@ jobs:
       # Publishing needs the AWS role from infra/terraform/live/global. Until that
       # variable exists, main still gets the full test/build/scan/SBOM pipeline.
       publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_ECR_PUSH_ROLE_ARN != '' }}
+      # Same for Azure: publishing to ACR starts once AZURE_ACR_PUSH_CLIENT_ID is set
+      publish_azure: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AZURE_ACR_PUSH_CLIENT_ID != '' }}
     permissions:
       contents: write        # bump the dev overlay
-      id-token: write        # OIDC to AWS and Sigstore
+      id-token: write        # OIDC to AWS, Azure and Sigstore
       security-events: write # upload Trivy SARIF
     secrets: inherit

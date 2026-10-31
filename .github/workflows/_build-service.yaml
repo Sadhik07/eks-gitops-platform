@@ -9,7 +9,12 @@ on:
         required: true
         type: string
       publish:
-        description: Push, sign and deploy to dev (main branch only)
+        description: Push to ECR, sign and deploy to the AWS dev cluster (main branch only)
+        required: false
+        type: boolean
+        default: false
+      publish_azure:
+        description: Push to ACR, sign and deploy to the Azure dev cluster (main branch only)
         required: false
         type: boolean
         default: false
@@ -137,23 +142,49 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "Pushed $digest" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-        if: inputs.publish
+      # ---- Azure: same image, pushed to ACR with an Entra federated identity ----
+      - name: Azure login (OIDC, no client secret)
+        if: inputs.publish_azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_ACR_PUSH_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Sign image and attach SBOM attestation (keyless)
-        if: inputs.publish
+      - name: Push image to ACR
+        if: inputs.publish_azure
+        id: push_acr
         env:
-          DIGEST: ${{ steps.push.outputs.digest }}
+          ACR: ${{ vars.AZURE_ACR_NAME }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          az acr login --name "$ACR"
+          image="$ACR.azurecr.io/orders/$SERVICE:$TAG"
+          docker tag "local/$SERVICE:$TAG" "$image"
+          docker push "$image"
+          digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$image" | grep azurecr.io | head -1)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Pushed $digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: inputs.publish || inputs.publish_azure
+
+      - name: Sign images and attach SBOM attestations (keyless)
+        if: inputs.publish || inputs.publish_azure
+        env:
+          DIGESTS: ${{ steps.push.outputs.digest }} ${{ steps.push_acr.outputs.digest }}
         run: |
           # Identity = this workflow on this repo, recorded in the Rekor transparency log.
-          # Kyverno's verify-image-signatures policy checks exactly this identity.
-          cosign sign --yes "$DIGEST"
-          cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$DIGEST"
+          # Kyverno's verify-image-signatures policy checks exactly this identity, on both clouds.
+          for digest in $DIGESTS; do
+            cosign sign --yes "$digest"
+            cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$digest"
+          done
 
   deploy-dev:
-    name: deploy to dev (${{ inputs.service }})
+    name: deploy to dev clusters (${{ inputs.service }})
     needs: build
-    if: inputs.publish
+    if: inputs.publish || inputs.publish_azure
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,16 +195,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - name: Bump image tag in the dev overlay
+      - name: Bump image tag in the dev overlays
         env:
           TAG: ${{ needs.build.outputs.tag }}
+          AWS: ${{ inputs.publish }}
+          AZURE: ${{ inputs.publish_azure }}
         run: |
-          file="deploy/overlays/dev/$SERVICE/kustomization.yaml"
-          yq -i "(.images[] | select(.name == \"$SERVICE\")).newTag = \"$TAG\"" "$file"
+          envs=()
+          [[ "$AWS" == "true" ]] && envs+=(dev)
+          [[ "$AZURE" == "true" ]] && envs+=(azure-dev)
+          for env in "${envs[@]}"; do
+            file="deploy/overlays/$env/$SERVICE/kustomization.yaml"
+            yq -i "(.images[] | select(.name == \"$SERVICE\")).newTag = \"$TAG\"" "$file"
+            git add "$file"
+          done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$file"
-          git commit -m "deploy(dev): $SERVICE $TAG"
+          git commit -m "deploy(${envs[*]}): $SERVICE $TAG"
           # Another service may have bumped dev at the same time: rebase and retry
           for attempt in 1 2 3; do
             git pull --rebase origin main && git push origin HEAD:main && exit 0

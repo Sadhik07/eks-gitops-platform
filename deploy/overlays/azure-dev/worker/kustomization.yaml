@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orders
+resources:
+  - ../../../base/worker
+images:
+  - name: worker
+    newName: sadhik07orders.azurecr.io/orders/worker
+    newTag: bootstrap
+configMapGenerator:
+  - name: worker-config
+    literals:
+      - ENVIRONMENT=azure-dev
+      - QUEUE_BACKEND=servicebus
+      - SERVICEBUS_NAMESPACE=sb-sadhik07-orders-dev.servicebus.windows.net
+      - QUEUE_NAME=orders
+      - LOG_LEVEL=DEBUG
+patches:
+  - target: { kind: ServiceAccount, name: worker }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000 # sync:client-id:worker
+  - target: { kind: Deployment, name: worker }
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/labels/azure.workload.identity~1use
+        value: "true"
+      - op: replace
+        path: /spec/replicas
+        value: 1

@@ -1,4 +1,4 @@
-# Supply-chain gate: images from our ECR must be signed by THIS repository's
+# Supply-chain gate: images from our ECR or ACR must be signed by THIS repository's
 # GitHub Actions workflows (Sigstore keyless / cosign). An image pushed by hand,
 # or by any other repo, is rejected at admission. Tags are also rewritten to
 # immutable digests so what was verified is exactly what runs.
@@ -22,9 +22,12 @@ spec:
               kinds: ["Pod"]
       verifyImages:
         - imageReferences:
-            - "*.dkr.ecr.*.amazonaws.com/orders/*"
+            - "*.dkr.ecr.*.amazonaws.com/orders/*" # AWS (EKS)
+            - "*.azurecr.io/orders/*" # Azure (AKS)
           imageRegistryCredentials:
-            helpers: ["amazon"] # Kyverno's Pod Identity role grants ECR read (Terraform)
+            # Kyverno's cloud identity grants registry read: EKS Pod Identity on AWS,
+            # Entra Workload ID on Azure (both created in Terraform)
+            helpers: ["amazon", "azure"]
           mutateDigest: true
           verifyDigest: true
           required: true

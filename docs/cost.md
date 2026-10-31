@@ -21,3 +21,13 @@ prices on the AWS pricing pages; they vary by region and change over time.
   shows its monthly cost delta.
 - Karpenter's `limits` in `platform/config/karpenter/nodepool.yaml` are a hard
   ceiling on how much compute the cluster can buy.
+
+## Azure (`azure-dev`)
+
+| Item | Why it costs | How to minimise |
+|---|---|---|
+| AKS control plane | Free on the Free tier | Keep `sku_tier = "Free"` outside production |
+| System node pool | 2 x Standard_D2s_v5 | Destroy when idle; NAP adds app nodes only when pods need them |
+| Load balancer and public IP | Hourly | Created with the cluster; gone after `destroy` |
+| Service Bus Standard, Key Vault, storage | Small monthly base plus usage | Cents per day at lab volumes |
+| ACR Standard (in `global`) | Daily fee | Destroy `live/global` when finished with Azure |

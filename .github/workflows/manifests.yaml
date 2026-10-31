@@ -62,7 +62,7 @@ jobs:
         run: |
           # Same policies the admission controller enforces, applied to what we ship.
           # (Signature verification needs the registry, so it is enforced in-cluster.)
-          for f in rendered/deploy_overlays_{dev,stage,prod}_*.yaml; do
+          for f in rendered/deploy_overlays_{dev,stage,prod,azure-dev}_*.yaml; do
             # Kyverno auto-generates rules for Deployments but not Argo Rollouts,
             # so check each Rollout's pod template as if it were a Deployment.
             yq -i '(select(.kind == "Rollout") | .apiVersion) = "apps/v1"' "$f"

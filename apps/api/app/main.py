@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import random
+import threading
 import time
 import uuid
 from typing import Any
@@ -61,20 +62,52 @@ class OrderIn(BaseModel):
 
 
 class Queue:
-    """SQS when QUEUE_URL is set, in-memory otherwise (local/kind and tests)."""
+    """Where accepted orders go. Selected by QUEUE_BACKEND:
+
+    * ``sqs``        - AWS SQS (QUEUE_URL); credentials from EKS Pod Identity
+    * ``servicebus`` - Azure Service Bus (SERVICEBUS_NAMESPACE, QUEUE_NAME);
+                       credentials from Entra Workload ID, AMQP over websockets
+                       so only port 443 is needed
+    * ``memory``     - in-process list for tests and quick local runs
+
+    Without QUEUE_BACKEND, a set QUEUE_URL means SQS (backwards compatible).
+    """
 
     def __init__(self) -> None:
-        self.url = os.getenv("QUEUE_URL")
+        self.backend = os.getenv("QUEUE_BACKEND") or (
+            "sqs" if os.getenv("QUEUE_URL") else "memory"
+        )
         self.memory: list[dict[str, Any]] = []
-        self._sqs = None
-        if self.url:
-            import boto3  # imported lazily so tests don't need AWS config
+        self._lock = threading.Lock()
+        if self.backend == "sqs":
+            import boto3  # imported lazily so tests don't need cloud SDKs configured
 
+            self.url = os.environ["QUEUE_URL"]
             self._sqs = boto3.client("sqs")
+        elif self.backend == "servicebus":
+            from azure.identity import DefaultAzureCredential
+            from azure.servicebus import ServiceBusClient, TransportType
+
+            self._sb = ServiceBusClient(
+                os.environ["SERVICEBUS_NAMESPACE"],
+                credential=DefaultAzureCredential(),
+                transport_type=TransportType.AmqpOverWebsocket,
+            )
+            self._sender = self._sb.get_queue_sender(os.getenv("QUEUE_NAME", "orders"))
+        elif self.backend != "memory":
+            raise ValueError(f"unknown QUEUE_BACKEND '{self.backend}'")
 
     def send(self, message: dict[str, Any]) -> None:
-        if self._sqs:
-            self._sqs.send_message(QueueUrl=self.url, MessageBody=json.dumps(message))
+        body = json.dumps(message)
+        if self.backend == "sqs":
+            self._sqs.send_message(QueueUrl=self.url, MessageBody=body)
+        elif self.backend == "servicebus":
+            from azure.servicebus import ServiceBusMessage
+
+            with self._lock:  # a Service Bus sender is not thread-safe
+                self._sender.send_messages(
+                    ServiceBusMessage(body, content_type="application/json")
+                )
         else:
             self.memory.append(message)
 

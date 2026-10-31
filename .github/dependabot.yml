@@ -14,6 +14,17 @@ updates:
   - package-ecosystem: docker
     directories: ["/apps/api", "/apps/worker", "/apps/web"]
     schedule: { interval: weekly }
+  # Provider major versions break the pinned community modules (e.g. EKS module
+  # v20 needs AWS provider v5), so majors are upgraded deliberately, not by bot.
   - package-ecosystem: terraform
     directories: ["/infra/terraform/live/*", "/infra/terraform/modules/*"]
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "hashicorp/aws"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: terraform
+    directories: ["/infra/terraform-azure/live/*", "/infra/terraform-azure/modules/*", "/infra/terraform-azure/bootstrap"]
+    schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "hashicorp/azurerm"
+        update-types: ["version-update:semver-major"]

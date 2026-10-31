@@ -93,3 +93,20 @@ flowchart TB
 | Network segmentation | NetworkPolicies per workload, default deny |
 | IaC misconfiguration | Checkov and tflint on every PR, with justified skips inline |
 | Supply chain of CI itself | Every GitHub Action pinned to a commit SHA, updated by Dependabot |
+
+## Azure (AKS)
+
+The same delivery path and add-ons run on AKS. Only the cloud layer changes:
+
+| Concern | AWS | Azure |
+|---|---|---|
+| Cluster | EKS, managed node group for add-ons | AKS (Free tier), tainted system pool, Azure CNI Overlay + Cilium |
+| App capacity | Karpenter `NodePool` | Node Auto-Provisioning (Karpenter on AKS) |
+| Workload cloud access | EKS Pod Identity | Entra Workload ID (federated credential per service account) |
+| CI cloud access | GitHub OIDC to IAM roles | GitHub OIDC to managed identities |
+| Registry | ECR | ACR (pulled by the kubelet identity, `AcrPull`) |
+| Queue | SQS + DLQ | Service Bus queue with dead-letter sub-queue |
+| Secrets | Secrets Manager | Key Vault (RBAC mode) |
+| Cluster access | IAM access entries | Entra ID only (local accounts disabled) |
+
+Details: [ADR 0005](adr/0005-multi-cloud-aws-and-azure.md), [setup guide](setup-azure.md).

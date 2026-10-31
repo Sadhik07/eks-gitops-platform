@@ -83,3 +83,19 @@ results:
     resources: [docker-hub-latest]
     kind: Pod
     result: fail
+  # Azure: our ACR passes, another registry on azurecr.io does not
+  - policy: restrict-images
+    rule: trusted-registry-only
+    resources: [compliant-azure]
+    kind: Pod
+    result: pass
+  - policy: restrict-images
+    rule: disallow-latest-tag
+    resources: [compliant-azure]
+    kind: Pod
+    result: pass
+  - policy: restrict-images
+    rule: trusted-registry-only
+    resources: [other-team-acr]
+    kind: Pod
+    result: fail

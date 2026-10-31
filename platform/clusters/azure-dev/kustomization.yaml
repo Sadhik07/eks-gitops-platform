@@ -1,0 +1,103 @@
+# Everything ArgoCD runs on the Azure dev cluster (AKS). The add-on list is the
+# same one AWS clusters use; these patches swap the cloud-specific parts:
+#   Karpenter app  -> removed (AKS Node Auto-Provisioning is built in)
+#   IAM / Pod Identity -> Entra Workload ID (service account client-id annotations)
+#   S3 / EBS       -> Azure Blob / Azure Disk for Velero
+#   gp3            -> managed-csi-premium for Prometheus storage
+# Values marked "# sync:..." are filled in by scripts/azure-sync-outputs.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../addons
+patches:
+  - target: { kind: Application, name: karpenter }
+    patch: |-
+      $patch: delete
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: karpenter
+  - target: { kind: Application, name: platform-config }
+    patch: |-
+      - op: replace
+        path: /spec/source/path
+        value: platform/clusters/azure-dev/config
+  - target: { kind: ApplicationSet, name: orders }
+    patch: |-
+      - op: replace
+        path: /spec/generators/0/git/directories/0/path
+        value: deploy/overlays/azure-dev/*
+  - target: { kind: Application, name: kube-prometheus-stack }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/prometheus/prometheusSpec/storageSpec/volumeClaimTemplate/spec/storageClassName
+        value: managed-csi-premium
+  - target: { kind: Application, name: kyverno }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject/admissionController/replicas
+        value: 1
+      - op: add
+        path: /spec/source/helm/valuesObject/admissionController/podLabels
+        value:
+          azure.workload.identity/use: "true"
+      - op: add
+        path: /spec/source/helm/valuesObject/admissionController/rbac
+        value:
+          serviceAccount:
+            annotations:
+              azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000 # sync:client-id:kyverno
+  - target: { kind: Application, name: external-secrets }
+    patch: |-
+      - op: add
+        path: /spec/source/helm/valuesObject/serviceAccount/annotations
+        value:
+          azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000 # sync:client-id:external-secrets
+  - target: { kind: Application, name: velero }
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/valuesObject
+        value:
+          serviceAccount:
+            server:
+              name: velero-server
+              annotations:
+                azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000 # sync:client-id:velero
+          podLabels:
+            azure.workload.identity/use: "true"
+          initContainers:
+            - name: velero-plugin-for-microsoft-azure
+              image: velero/velero-plugin-for-microsoft-azure:v1.14.4
+              volumeMounts:
+                - { mountPath: /target, name: plugins }
+          credentials:
+            useSecret: false
+          configuration:
+            backupStorageLocation:
+              - name: default
+                provider: azure
+                bucket: velero
+                config:
+                  resourceGroup: rg-orders-dev
+                  storageAccount: sadhik07velerodev
+                  subscriptionId: 00000000-0000-0000-0000-000000000000 # sync:subscription-id
+                  useAAD: "true"
+            volumeSnapshotLocation:
+              - name: default
+                provider: azure
+                config:
+                  resourceGroup: MC_rg-orders-dev_aks-orders-dev_eastus2
+                  subscriptionId: 00000000-0000-0000-0000-000000000000 # sync:subscription-id
+          schedules:
+            orders-daily:
+              schedule: "0 3 * * *"
+              template:
+                ttl: 168h
+                includedNamespaces: ["orders"]
+                snapshotVolumes: true
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: true
+              additionalLabels:
+                release: kube-prometheus-stack

@@ -17,11 +17,11 @@ spec:
               kinds: ["Pod"]
               namespaces: ["orders"]
       validate:
-        message: "Images in the orders namespace must come from this account's ECR."
+        message: "Images in the orders namespace must come from our ECR (AWS) or ACR (Azure) registry."
         pattern:
           spec:
             containers:
-              - image: "*.dkr.ecr.*.amazonaws.com/orders/*"
+              - image: "*.dkr.ecr.*.amazonaws.com/orders/* | *.azurecr.io/orders/*"
     - name: disallow-latest-tag
       match:
         any:

@@ -1,0 +1,6 @@
+# Included by Azure overlays only: pulls API secrets from Azure Key Vault via
+# External Secrets Operator (the AWS overlays use components/aws-secrets).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecret.yaml

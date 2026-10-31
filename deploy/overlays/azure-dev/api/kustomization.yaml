@@ -1,0 +1,46 @@
+# Same api base as AWS; only the cloud wiring differs: ACR image, Service Bus
+# queue, Key Vault secrets and an Entra Workload ID instead of EKS Pod Identity.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orders
+resources:
+  - ../../../base/api
+components:
+  - ../../../components/azure-secrets
+images:
+  - name: api
+    newName: sadhik07orders.azurecr.io/orders/api
+    newTag: bootstrap # updated by CI on every merge to main
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=azure-dev
+      - QUEUE_BACKEND=servicebus
+      - SERVICEBUS_NAMESPACE=sb-sadhik07-orders-dev.servicebus.windows.net
+      - QUEUE_NAME=orders
+      - LOG_LEVEL=DEBUG
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4317
+patches:
+  # Entra Workload ID: the webhook injects a federated token for this client id
+  - target: { kind: ServiceAccount, name: api }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000 # sync:client-id:api
+  - target: { kind: Rollout, name: api }
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/labels/azure.workload.identity~1use
+        value: "true"
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target: { kind: HorizontalPodAutoscaler, name: api }
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4

@@ -41,3 +41,53 @@ def test_metrics_exposed(monkeypatch):
     body = c.get("/metrics").text
     assert "http_requests_total" in body
     assert "http_request_duration_seconds_bucket" in body
+
+
+def test_unknown_queue_backend_is_rejected(monkeypatch):
+    import pytest
+
+    monkeypatch.setenv("QUEUE_BACKEND", "kafka")
+    with pytest.raises(ValueError):
+        create_app()
+
+
+def test_service_bus_backend_sends_json(monkeypatch):
+    """The Azure path builds a ServiceBusMessage and sends it through the queue sender."""
+    import sys
+    import types
+
+    sent = []
+
+    class FakeSender:
+        def send_messages(self, message):
+            sent.append(message)
+
+    class FakeClient:
+        def __init__(self, namespace, credential, transport_type):
+            assert namespace == "sb-test.servicebus.windows.net"
+
+        def get_queue_sender(self, name):
+            assert name == "orders"
+            return FakeSender()
+
+    sb = types.ModuleType("azure.servicebus")
+    sb.ServiceBusClient = FakeClient
+    sb.TransportType = types.SimpleNamespace(AmqpOverWebsocket="ws")
+    sb.ServiceBusMessage = lambda body, content_type: {
+        "body": body,
+        "type": content_type,
+    }
+    ident = types.ModuleType("azure.identity")
+    ident.DefaultAzureCredential = lambda: object()
+    monkeypatch.setitem(sys.modules, "azure.servicebus", sb)
+    monkeypatch.setitem(sys.modules, "azure.identity", ident)
+    monkeypatch.setenv("QUEUE_BACKEND", "servicebus")
+    monkeypatch.setenv("SERVICEBUS_NAMESPACE", "sb-test.servicebus.windows.net")
+
+    c = TestClient(create_app())
+    assert c.post("/api/orders", json={"sku": "AZ-1", "quantity": 1}).status_code == 202
+    assert (
+        sent
+        and '"sku": "AZ-1"' in sent[0]["body"]
+        and sent[0]["type"] == "application/json"
+    )
