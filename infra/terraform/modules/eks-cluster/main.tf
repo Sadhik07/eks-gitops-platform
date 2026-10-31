@@ -1,6 +1,6 @@
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.37"
+  version = "~> 21.29"
 
   cluster_name    = var.cluster_name
   cluster_version = var.kubernetes_version
@@ -76,7 +76,7 @@ module "eks" {
 # Karpenter controller IAM, interruption SQS queue and node role
 module "karpenter" {
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version = "~> 20.37"
+  version = "~> 21.29"
 
   cluster_name          = module.eks.cluster_name
   enable_v1_permissions = true
