@@ -57,6 +57,7 @@ resource "azurerm_role_assignment" "kubelet_acr_pull" {
 }
 
 # --- Order queue -------------------------------------------------------------
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # environments are torn down after demos; prod data protection would come from backups + soft delete
 resource "azurerm_servicebus_namespace" "this" {
   #checkov:skip=CKV_AZURE_199:Microsoft-managed keys are sufficient; customer-managed keys need Premium
   #checkov:skip=CKV_AZURE_201:Customer-managed keys need Premium
@@ -75,6 +76,7 @@ resource "azurerm_servicebus_namespace" "this" {
   }
 }
 
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # environments are torn down after demos; prod data protection would come from backups + soft delete
 resource "azurerm_servicebus_queue" "orders" {
   name                                 = "orders"
   namespace_id                         = azurerm_servicebus_namespace.this.id
@@ -85,6 +87,7 @@ resource "azurerm_servicebus_queue" "orders" {
 }
 
 # --- Application secrets: values are set out of band, never in Terraform state ---
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # environments are torn down after demos; prod data protection would come from backups + soft delete
 resource "azurerm_key_vault" "this" {
   #checkov:skip=CKV_AZURE_109:Public access is needed from GitHub-hosted runners; RBAC limits who can read secrets
   #checkov:skip=CKV_AZURE_189:Same as above
@@ -114,6 +117,7 @@ resource "azurerm_role_assignment" "deployer_kv_secrets" {
 }
 
 # --- Velero backups ----------------------------------------------------------
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # environments are torn down after demos; prod data protection would come from backups + soft delete
 resource "azurerm_storage_account" "velero" {
   #checkov:skip=CKV_AZURE_33:Queue service is unused
   #checkov:skip=CKV_AZURE_59:Velero runs in the cluster and reaches storage over its public endpoint with Entra ID auth
@@ -139,6 +143,7 @@ resource "azurerm_storage_account" "velero" {
   }
 }
 
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # environments are torn down after demos; prod data protection would come from backups + soft delete
 resource "azurerm_storage_container" "velero" {
   #checkov:skip=CKV2_AZURE_21:Blob read logging needs a Log Analytics workspace
   name                  = "velero"

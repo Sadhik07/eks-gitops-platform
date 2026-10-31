@@ -64,6 +64,10 @@ resource "azurerm_storage_container" "state" {
   name                  = "tfstate"
   storage_account_id    = azurerm_storage_account.state.id
   container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true # holds every environment's state
+  }
 }
 
 # The person running bootstrap can read/write state with their Entra identity
