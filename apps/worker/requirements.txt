@@ -1,4 +1,4 @@
-boto3==1.43.123
+boto3==1.44.0
 prometheus-client==0.26.0
 azure-identity==1.27.0
 azure-servicebus==7.15.0
